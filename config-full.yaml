@@ -1,0 +1,465 @@
+# ══════════════════════════════════════════════════════════════
+# Mihomo 进阶配置 
+# ══════════════════════════════════════════════════════════════
+
+
+# ══ 全局 ══════════════════════════════════════════════
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: warning
+ipv6: true
+find-process-mode: strict
+unified-delay: true            # 统一延迟：用实际往返时间，比握手时间更准
+tcp-concurrent: true           # TCP 并发建连：选最快的 IP
+global-client-fingerprint: chrome
+keep-alive-interval: 30        # TCP keepalive 探测间隔（秒）
+keep-alive-idle: 600           # TCP keepalive 空闲等待时间（秒）
+global-ua: clash-verge/v2.5.2  # 在下载外部资源时(机场订阅)使用的 UA 值
+
+# ── GeoData 加载优化 ────────────────────────────────────────────────────────
+geodata-mode: true
+geodata-loader: memconservative  # 内存节省模式（路由器/内存小的设备推荐）
+                                 # standard：性能更高，内存占用也更多
+geosite-matcher: succinct        # succinct（精简）/ mph（哈希，速度最快）
+
+### 如果使用的是裸核，需要将下面的注释去掉，方便ui界面的使用
+# external-controller: 127.0.0.1:9090
+# external-ui: ui
+# external-ui-url: 'https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip'
+# secret: "your_strong_password"
+
+profile:
+  store-selected: true
+  store-fake-ip: true
+
+geox-url:
+  geoip:   "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
+  geosite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
+  mmdb:    "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/country.mmdb"
+
+# ── TUN ────────────────────────────────────────────────────────
+tun:
+  enable: true
+  stack: mixed              # 协议栈：mixed（推荐）/ system / gvisor
+                            # system：速度最快，兼容性最好，内存最低
+                            # gvisor：用户态网络栈，UDP 支持更好，但性能略低
+                            # mixed：TCP 走 system，UDP 走 gvisor，均衡之选
+  device: mihomo            # 虚拟网卡名称（可自定义，Linux 下常见 tun0）
+  dns-hijack:
+    - "any:53"              # 劫持所有发往 53 端口的 DNS 请求
+    - "tcp://any:53"        # 同时劫持 TCP 的 DNS
+  auto-detect-interface: true   # 自动识别出口网卡（推荐）
+  auto-route: true              # 自动配置系统路由表（TUN 接管全流量的关键）
+  strict-route: true            # 严格路由：防止流量绕过 TUN（会影响某些 VPN 场景）
+  mtu: 1500                     # MTU，适当提高减少分片（以太网推荐 1500，虚拟网络可更高）
+
+  # 以下 IP 段排除在 TUN 之外（直接走本机网络）
+  route-exclude-address:
+    - "192.168.0.0/16"
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    # 如果使用 ZeroTier / Tailscale 等内网穿透，把对应网段也加进来
+
+  # gso: true               # 通用分段卸载（仅 Linux，可提升 UDP 性能）
+  # gso-max-size: 65536
+
+# ── 嗅探 ──────────────────────────────────────────────────────
+sniffer:
+  enable: true
+  sniff:
+    HTTP:  { ports: [80, 8080-8880], override-destination: true }
+    TLS:   { ports: [443, 8443] }
+    QUIC:  { ports: [443, 8443] }
+  skip-domain:
+    - "Mijia Cloud"
+    - "+.push.apple.com"
+
+# ── DNS ────────────────────────────────────────────────────────
+dns:
+  enable: true
+  listen: 0.0.0.0:1053
+  ipv6: false
+  prefer-h3: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  respect-rules: true          # DNS 解析遵守路由规则：代理域名走代理侧解析
+  fake-ip-filter:
+    - "*"
+    - "+.lan"
+    - "connect.rom.miui.com"
+    - "+.miwifi.com"
+    - "+.ntp.org"
+    - "+.u-tools.cn"
+    - "+.mediatek.com"
+    - "+.cfprefer1.xyz"
+    - "+.wetab.link"
+    - "+.tyasaka.xyz"
+    # QQ
+    - "localhost.ptlogin2.qq.com"
+    - "localhost.sec.qq.com"
+    # WeChat
+    - "localhost.work.weixin.qq.com"
+    - "+.weixin.qq.com"
+    - "+.wechat.com"
+    # Windows
+    - "time.windows.com"
+    - "+.msftconnecttest.com"
+    - "+.msftncsi.com"
+    - "+.wpsmail.net"
+    - "+.henzanapp.com"
+    - "+.pconline.com.cn"
+
+# 解析代理节点域名
+  proxy-server-nameserver:
+    - https://223.5.5.5/dns-query
+    - https://doh.pub/dns-query
+
+  # nameserver-policy：特定域名走特定 DNS（优先级最高）
+  nameserver-policy:
+    # 国内主要厂商用自家 DNS，解析结果最准确
+    "geosite:cn,private":
+      - https://223.5.5.5/dns-query
+      - https://doh.pub/dns-query
+    # 国外域名走加密 DNS（配合 respect-rules 会走代理）
+    "geosite:geolocation-!cn":
+      - "tls://8.8.8.8"
+      - "tls://1.1.1.1"
+
+  # 默认 nameserver（nameserver-policy 未覆盖的域名使用这里）
+  nameserver:
+    - https://223.5.5.5/dns-query
+    - https://doh.pub/dns-query
+
+# ── 锚点统一管理 ──────────────────
+# 订阅提供者锚点
+p: &p
+  type: http
+  interval: 86400
+  health-check:
+    enable: true
+    url: "https://www.gstatic.com/generate_204"
+    interval: 300
+    timeout: 5000
+    lazy: true
+#  filter: "^(?!.*(剩余|到期|官网|免费|试用|套餐|重置|过期|流量|时间|有效|网址|禁止|邮箱|发布|客服|订阅|节点)).*$"
+# 规则集类型锚点
+rs_classical_yaml: &rs_classical_yaml { type: http, behavior: classical, interval: 43200, format: yaml }
+rs_classical: &rs_classical { type: http, behavior: classical, interval: 43200, format: text }
+rs_domain:    &rs_domain    { type: http, behavior: domain,    interval: 43200, format: text }
+rs_ipcidr:    &rs_ipcidr    { type: http, behavior: ipcidr,    interval: 43200, format: text }
+# 代理组类型锚点
+g_select:   &g_select   { type: select,       url: "https://www.gstatic.com/generate_204", include-all: true }
+g_urltest:  &g_urltest  { type: url-test,     url: "https://www.gstatic.com/generate_204", interval: 300, lazy: true, tolerance: 50, timeout: 2000, max-failed-times: 3, include-all: true, hidden: false }
+g_fallback: &g_fallback { type: fallback,     url: "https://www.gstatic.com/generate_204", interval: 300, lazy: true, timeout: 2000, max-failed-times: 3, include-all: true, hidden: true }
+g_balance:  &g_balance  { type: load-balance, url: "https://www.gstatic.com/generate_204", interval: 300, lazy: true, timeout: 2000, strategy: consistent-hashing, max-failed-times: 3, include-all: true, hidden: true }
+# 正则表达式锚点(节点筛选)
+FilterHK: &FilterHK '^(?=.*(🇭🇰|港|HK|Hong Kong))(?!.*(回国|校园|游戏|剩余|到期|官网|客服|订阅|节点|过期|时间)).*$'
+FilterTW: &FilterTW '^(?=.*(🇹🇼|台|TW|Taiwan))(?!.*(回国|校园|游戏|剩余|到期|官网|客服|订阅|节点|过期|时间)).*$'
+FilterJP: &FilterJP '^(?=.*(🇯🇵|日|JP|Japan|Tokyo|Osaka))(?!.*(回国|校园|游戏|剩余|到期|官网|客服|订阅|节点|过期|时间)).*$'
+FilterSG: &FilterSG '^(?=.*(🇸🇬|新|SG|Singapore))(?!.*(回国|校园|游戏|剩余|到期|官网|客服|订阅|节点|过期|时间)).*$'
+FilterUS: &FilterUS '^(?=.*(🇺🇸|美|US|United States|Los Angeles|Silicon|Seattle))(?!.*(回国|校园|游戏|剩余|到期|官网|客服|订阅|节点|过期|时间)).*$'
+FilterKR: &FilterKR '^(?=.*(🇰🇷|韩|KR|Korea))(?!.*(回国|校园|游戏|剩余|到期|官网|客服|订阅|节点|过期|时间)).*$'
+FilterISP: &FilterISP '^(?=.*(🇯🇵日本4-IEPL-家宽|🇰🇷 KR 寄生上流 KT|🇺🇸 US Dune AT&T|🇭🇰 HK 東邪西毒 HKT|🇲🇴 MO 賭城風雲 CTM|🇹🇼 TW 海角七號 Hinet|🇩🇪德国-IEPL))(?!.*(回国|校园|游戏|剩余|到期|官网|客服|订阅|节点|过期|时间)).*$'
+FilterAI: &FilterAI '^(?=.*(🇯🇵日本4-IEPL-家宽|🇰🇷 KR 寄生上流 KT|🇺🇸 US Dune AT&T|🇩🇪德国-IEPL))(?!.*(回国|校园|游戏|剩余|到期|官网|客服|订阅|节点|过期|时间)).*$'
+FilterAIAUTO: &FilterAIAUTO '^(?=.*(🇯🇵日本4-IEPL-家宽|🇰🇷 KR 寄生上流 KT))(?!.*(回国|校园|游戏|剩余|到期|官网|客服|订阅|节点|过期|时间)).*$'
+
+# ── 代理提供者 ────────────────────────────────────────────────
+proxy-providers:
+  BaJie:
+    <<: *p
+    url: "https://74.82.196.10:2300/api/v1/client/subscribe?token=2d2070714e155abf95397a41c35cb1c0"
+    path: ./proxy_providers/airport-bajie.yaml  # 注意：每个 provider 要有不同的 path！
+
+  Film:
+    <<: *p
+    url: "https://dd.filmtoday.top/film/97686de8bdb44645c2ea0648b1d4180a"
+    path: ./proxy_providers/airport-film.yaml  
+
+  Jkun:
+    <<: *p
+    url: "https://jkun.waimaosass.icu/api/v1/client/subscribe?token=8385790edb9f15d5e581d48db7dcd0c2"
+    path: ./proxy_providers/airport-jkun.yaml  
+
+
+# ── 代理组 ────────────────────────────────────────────────────
+proxy-groups:
+  # ── 顶层入口 ────────────────────────────────────────────────
+  - name: "🎯 节点选择"
+    type: select
+    proxies:
+      - "🌐 智能选择"
+   #  - "✋ 手动选择"
+      - DIRECT
+    include-all: true
+
+  # ── 二级入口 ────────────────────────────────────
+  - name: "🌐 智能选择"
+    type: select
+    proxies:
+      - "🇭🇰 香港"
+      - "🇸🇬 新加坡"
+      - "🇯🇵 日本"
+      - "🇺🇸 美国"
+      - "🇰🇷 韩国"
+      - "🇹🇼 台湾"
+
+  - name: "✋ 手动选择"
+    <<: *g_select
+    hidden: true
+
+  # ── 功能性分组（指向具体地区）─────────────────────────────────
+  - name: "🤖 Claude 服务"
+    type: select
+    proxies: ["🇺🇸 美国", "🇸🇬 新加坡", "🤖 AI-自动", 🎯 节点选择"]
+    include-all: true
+    filter: *FilterAI
+
+  - name: "🤖 AI 服务"
+    type: select
+    proxies: ["🇺🇸 美国", "🇸🇬 新加坡", "🤖 AI-自动", 🎯 节点选择"]
+    include-all: true
+    filter: *FilterAI
+
+  - name: "📹 流媒体"
+    type: select
+    proxies: ["🇭🇰 香港", "🇸🇬 新加坡", "🇯🇵 日本", "🇺🇸 美国", "🎯 节点选择"]
+
+  - name: "✈️ 电报消息"
+    type: select
+    proxies: ["🎯 节点选择", "🇸🇬 新加坡", "🇭🇰 香港"]
+
+  - name: "🍎 苹果服务"
+    type: select
+    proxies: [DIRECT, "🎯 节点选择", "🇭🇰 香港"]
+
+  - name: "Ⓜ️ 微软服务"
+    type: select
+    proxies: [DIRECT, "🎯 节点选择", "🇺🇸 美国"]
+
+  - name: "🛡️ 广告拦截"
+    type: select
+    proxies: [REJECT, DIRECT]     # REJECT = 直接拦截；REJECT-DROP = 静默丢弃
+
+  - name: "🐟 漏网之鱼"
+    type: select
+    proxies: ["🎯 节点选择", DIRECT]
+
+  # ── 地区三合一：每个地区都有"自动测速 / 自动回退 / 负载均衡" ──
+  - name: "🇭🇰 香港"
+    type: select
+    proxies: ["🇭🇰 香港-自动", "🇭🇰 香港-回退", "🇭🇰 香港-均衡"]
+
+  - name: "🇸🇬 新加坡"
+    type: select
+    proxies: ["🇸🇬 新加坡-自动", "🇸🇬 新加坡-回退", "🇸🇬 新加坡-均衡"]
+
+  - name: "🇯🇵 日本"
+    type: select
+    proxies: ["🇯🇵 日本-自动", "🇯🇵 日本-回退", "🇯🇵 日本-均衡"]
+
+  - name: "🇺🇸 美国"
+    type: select
+    proxies: ["🇺🇸 美国-自动", "🇺🇸 美国-回退", "🇺🇸 美国-均衡"]
+
+  - name: "🇰🇷 韩国"
+    type: select
+    proxies: ["🇰🇷 韩国-自动", "🇰🇷 韩国-回退", "🇰🇷 韩国-均衡"]
+
+  - name: "🇹🇼 台湾"
+    type: select
+    proxies: ["🇹🇼 台湾-自动", "🇹🇼 台湾-回退", "🇹🇼 台湾-均衡"]
+
+  # ── 地区自动测速 ──────────────
+  - { name: "🇭🇰 香港-自动",   <<: *g_urltest,  filter: *FilterHK, include-all: false, use: [Film] }
+  - { name: "🇸🇬 新加坡-自动", <<: *g_urltest,  filter: *FilterSG }
+  - { name: "🇯🇵 日本-自动",   <<: *g_urltest,  filter: *FilterJP }
+  - { name: "🇺🇸 美国-自动",   <<: *g_urltest,  filter: *FilterUS }
+  - { name: "🇰🇷 韩国-自动",   <<: *g_urltest,  filter: *FilterKR }
+  - { name: "🇹🇼 台湾-自动",   <<: *g_urltest,  filter: *FilterTW }
+  - { name: "🤖 AI-自动",    <<: *g_urltest,  filter: *FilterAIAUTO }
+
+
+  # ── 地区自动回退 ──────────────────────────────────────────────
+  - { name: "🇭🇰 香港-回退",   <<: *g_fallback, filter: *FilterHK }
+  - { name: "🇸🇬 新加坡-回退", <<: *g_fallback, filter: *FilterSG }
+  - { name: "🇯🇵 日本-回退",   <<: *g_fallback, filter: *FilterJP }
+  - { name: "🇺🇸 美国-回退",   <<: *g_fallback, filter: *FilterUS }
+  - { name: "🇰🇷 韩国-回退",   <<: *g_fallback, filter: *FilterKR }
+  - { name: "🇹🇼 台湾-回退",   <<: *g_fallback, filter: *FilterTW }
+
+  # ── 地区负载均衡 ──────────────────────────────────────────────
+  - { name: "🇭🇰 香港-均衡",   <<: *g_balance,  filter: *FilterHK }
+  - { name: "🇸🇬 新加坡-均衡", <<: *g_balance,  filter: *FilterSG }
+  - { name: "🇯🇵 日本-均衡",   <<: *g_balance,  filter: *FilterJP }
+  - { name: "🇺🇸 美国-均衡",   <<: *g_balance,  filter: *FilterUS }
+  - { name: "🇰🇷 韩国-均衡",   <<: *g_balance,  filter: *FilterKR }
+  - { name: "🇹🇼 台湾-均衡",   <<: *g_balance,  filter: *FilterTW }
+
+# ── 规则集提供者 ──────────────────────────────────────────────────
+rule-providers:
+
+  # 广告拦截 ────────────────────────────────────────
+  reject_non_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/reject.txt"
+    path: ./rule_set/reject_non_ip.txt
+
+  reject_non_ip_drop:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/reject-drop.txt"
+    path: ./rule_set/reject_non_ip_drop.txt
+
+  reject_domainset:
+    <<: *rs_domain
+    url: "https://ruleset.skk.moe/Clash/domainset/reject.txt"
+    path: ./rule_set/reject_domainset.txt
+
+  # ── AI 服务(域名) ─────────────────────────────────────────
+  ai_anthropic:
+    <<: *rs_classical_yaml
+    url: "https://cdn.jsdelivr.net/gh/VPSDance/ai-proxy-rules@main/rules/clash/anthropic.yaml"
+    path: ./rule_set/anthropic.yaml
+
+  ai_non_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/ai.txt"
+    path: ./rule_set/ai_non_ip.txt
+
+  # ── 电报 ────────────────────────────────────────────
+  telegram_non_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/telegram.txt"
+    path: ./rule_set/telegram_non_ip.txt
+
+  # ── 流媒体 ──────────────────────────────────────────
+  stream_non_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/stream.txt"
+    path: ./rule_set/stream_non_ip.txt
+
+  # ── 苹果、微软 ──────────────────────────────────────
+  apple_cdn:
+    <<: *rs_domain
+    url: "https://ruleset.skk.moe/Clash/domainset/apple_cdn.txt"
+    path: ./rule_set/apple_cdn.txt
+
+  apple_services:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/apple_services.txt"
+    path: ./rule_set/apple_services.txt
+
+  apple_cn_non_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/apple_cn.txt"
+    path: ./rule_set/apple_cn_non_ip.txt
+
+  microsoft_cdn_non_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/microsoft_cdn.txt"
+    path: ./rule_set/microsoft_cdn_non_ip.txt
+
+  microsoft_non_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/microsoft.txt"
+    path: ./rule_set/microsoft_non_ip.txt
+
+  # ── 国内/国外/直连 ──────────────────────────────────
+  global_non_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/global.txt"
+    path: ./rule_set/global_non_ip.txt
+
+  domestic_non_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/domestic.txt"
+    path: ./rule_set/domestic_non_ip.txt
+
+  direct_non_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/direct.txt"
+    path: ./rule_set/direct_non_ip.txt
+
+  lan_non_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/non_ip/lan.txt"
+    path: ./rule_set/lan_non_ip.txt
+
+  # ── IP类规则（放在最后匹配）──────────────────────────────────
+  reject_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/ip/reject.txt"
+    path: ./rule_set/reject_ip.txt
+
+  telegram_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/ip/telegram.txt"
+    path: ./rule_set/telegram_ip.txt
+
+  stream_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/ip/stream.txt"
+    path: ./rule_set/stream_ip.txt
+
+  domestic_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/ip/domestic.txt"
+    path: ./rule_set/domestic_ip.txt
+
+  lan_ip:
+    <<: *rs_classical
+    url: "https://ruleset.skk.moe/Clash/ip/lan.txt"
+    path: ./rule_set/lan_ip.txt
+
+  china_ip:
+    <<: *rs_ipcidr
+    url: "https://ruleset.skk.moe/Clash/ip/china_ip.txt"
+    path: ./rule_set/china_ip.txt
+
+# ── 路由规则(精准分流) ──────────────────────────────────────────────────
+rules:
+  # ════ 域名类规则 ════════════════════════════════════════════
+  - DOMAIN-SUFFIX,invite.linuxdo.org,DIRECT
+  # 广告拦截（最优先）
+  - RULE-SET,reject_non_ip,🛡️ 广告拦截
+  - RULE-SET,reject_domainset,🛡️ 广告拦截
+  - RULE-SET,reject_non_ip_drop,REJECT-DROP   # 静默丢弃，防止某些探测
+
+  # AI 服务
+  - RULE-SET,ai_anthropic,🤖 Claude 服务
+  - RULE-SET,ai_non_ip,🤖 AI 服务
+
+  # 电报
+  - RULE-SET,telegram_non_ip,✈️ 电报消息
+
+  # 流媒体
+  - RULE-SET,stream_non_ip,📹 流媒体
+
+  # 苹果（CDN 直连，服务走苹果组，国内苹果直连）
+  - RULE-SET,apple_cdn,DIRECT
+  - RULE-SET,apple_cn_non_ip,DIRECT
+  - RULE-SET,apple_services,🍎 苹果服务
+
+  # 微软（CDN 直连，服务走微软组）
+  - RULE-SET,microsoft_cdn_non_ip,DIRECT
+  - RULE-SET,microsoft_non_ip,Ⓜ️ 微软服务
+
+  # 国外流量走代理
+  - RULE-SET,global_non_ip,🎯 节点选择
+
+  # 国内 / 直连
+  - RULE-SET,domestic_non_ip,DIRECT
+  - RULE-SET,direct_non_ip,DIRECT
+  - RULE-SET,lan_non_ip,DIRECT
+
+  # ════ IP类规则（会触发 DNS 解析，务必放在域名规则后面）═════
+
+  - RULE-SET,reject_ip,🛡️ 广告拦截
+  - RULE-SET,telegram_ip,✈️ 电报消息
+  - RULE-SET,stream_ip,📹 流媒体
+  - RULE-SET,lan_ip,DIRECT
+  - RULE-SET,domestic_ip,DIRECT
+  - RULE-SET,china_ip,DIRECT
+
+  # ════ 兜底 ═══════════════════════════════════════════════════
+  - MATCH,🐟 漏网之鱼
