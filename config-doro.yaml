@@ -44,7 +44,7 @@ p: &p
 proxy-providers:
   Doro2:
     <<: *p
-    url: "https://sub.dorocloud.xyz/doro/djJ8dHw4MDkyfDU5NzQxOTh8NjEyZGZmOTM3OWI3ODYyOTljMzI2ZTUxZjQxMGE0N2E3ZDMzZjBmZTMxZTExYjcwZGM5MzY5ZDIwNzkxOTMzMHwyYzY2YjI5ZWYwNDIyMDNlNGUwMDk3MTgzZDY4YjFiNmIzNWFmYWNi"
+    url: ""
     path: ./proxy_providers/airport-doro2.yaml  # 注意：每个 provider 要有不同的 path！
 
 # ── 配置持久化 ────────────────────────────────────────────────────────
