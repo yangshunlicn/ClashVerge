@@ -42,10 +42,10 @@ p: &p
 
 # ── 代理提供者 ────────────────────────────────────────────────
 proxy-providers:
-  Doro2:
+  Doro:
     <<: *p
-    url: ""
-    path: ./proxy_providers/airport-doro2.yaml  # 注意：每个 provider 要有不同的 path！
+    url: "https://sub.dorocloud.xyz/doro/5f9f4a7c80cbcb4223ad4a12188dc67d"
+    path: ./proxy_providers/airport-doro5.yaml  # 注意：每个 provider 要有不同的 path！
 
 # ── 配置持久化 ────────────────────────────────────────────────────────
 profile:
