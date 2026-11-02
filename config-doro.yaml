@@ -42,10 +42,10 @@ p: &p
 
 # ── 代理提供者 ────────────────────────────────────────────────
 proxy-providers:
-  Doro:
+  Doro8:
     <<: *p
     url: "https://sub.dorocloud.xyz/doro/5f9f4a7c80cbcb4223ad4a12188dc67d"
-    path: ./proxy_providers/airport-doro5.yaml  # 注意：每个 provider 要有不同的 path！
+    path: ./proxy_providers/airport-doro8.yaml  # 注意：每个 provider 要有不同的 path！
 
 # ── 配置持久化 ────────────────────────────────────────────────────────
 profile:
@@ -105,14 +105,13 @@ sniffer:
 dns:
   enable: true
   cache-algorithm: arc
-  listen: 0.0.0.0:1053
+  listen: 127.0.0.1:1053
   ipv6: true
   prefer-h3: false
   enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.1/16
   respect-rules: true          # DNS 解析遵守路由规则：代理域名走代理侧解析
   fake-ip-filter:
-    - "*"
     - "+.lan"
     - "connect.rom.miui.com"
     - "+.miwifi.com"
@@ -138,19 +137,25 @@ dns:
     - "+.pconline.com.cn"
 
 
+
   # 用于解析 DNS 服务器自身的域名
   default-nameserver:
-      - 223.5.5.5
+    - 223.5.5.5
 
-# 用于解析机场代理节点域名的 NDS 服务器
+  # 用于解析 Doro 代理节点域名. 改用Doro自带的私有 DoH(阿里 DoH 会把 tengxun.dorocloud.xyz 解析成 127.0.0.1)
+  proxy-server-nameserver-policy:
+    '+.dorocloud.xyz':
+      - https://dns.nianyun.net/dns-query/nyi0d8t-7fujtwi9iao0cem15pwxn101#h2=true
+
+  # 用于解析机场代理节点域名的 DNS 服务器
   proxy-server-nameserver:
     - https://dns.alidns.com/dns-query
     - https://doh.pub/dns-query
 
   # 用于 DIRECT 出口域名解析的 DNS 服务器
   direct-nameserver:
-      - https://dns.alidns.com/dns-query
-      - https://doh.pub/dns-query
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
 
   # nameserver-policy： DNS分流
   nameserver-policy:
@@ -165,8 +170,8 @@ dns:
 
   # 默认DNS服务器（nameserver-policy 未覆盖的域名走这里）
   nameserver:
-      - "tls://8.8.8.8"
-      - "tls://1.1.1.1"
+    - "tls://8.8.8.8"
+    - "tls://1.1.1.1"
 
 # 规则集类型锚点
 rs_classical_yaml: &rs_classical_yaml { type: http, behavior: classical, interval: 43200, format: yaml }
